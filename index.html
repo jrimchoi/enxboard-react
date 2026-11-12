@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>ENXBoard</title>
+    <link rel="stylesheet" href="./vendor/core/wux-3ds-fonticons.css">
+    <link rel="stylesheet" href="./vendor/enxboard/css/board.css">
+</head>
+<body>
+    <div id="board">게시판을 불러오는 중입니다.</div>
+    <script>
+        window.$DRWAF_DEBUG = "false";
+        (function () {
+            var queued = [];
+            var live = null;
+            window.__enxTakeWidgetQueue = function (onLive) {
+                var copy = queued.slice();
+                queued.length = 0;
+                live = onLive;
+                return copy;
+            };
+            window.addEventListener("message", function (event) {
+                var payload = event.data || {};
+                if (!payload || payload.source !== "3DDashboard") {
+                    return;
+                }
+                if (live) {
+                    live(payload);
+                } else {
+                    queued.push(payload);
+                }
+            });
+        })();
+    </script>
+    <script src="./js/loader.js"></script>
+    <script>
+        require(["DS/React18Loader/React", "DS/React18Loader/ReactDomClient", "DS/ENXBoardReact/js/app"], function (React, ReactDOM, App) {
+            var root = document.getElementById("board");
+            var widget = null;
+            try {
+                if (window.widget && window.widget.addEvent) {
+                    widget = window.widget;
+                } else if (window.parent && window.parent.widget) {
+                    widget = window.parent.widget;
+                }
+            } catch (error) {
+                widget = null;
+            }
+            if (root && React && ReactDOM) {
+                new App({
+                    root: root,
+                    widget: widget,
+                    title: "ENXBoard",
+                    appId: "ENXBoardReact",
+                }).init();
+            }
+        });
+    </script>
+</body>
+</html>
