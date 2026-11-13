@@ -6,7 +6,7 @@
  * 글 목록은 이 훅 안에만 있다. define이나 require는 없다.
  */
 import { useEffect, useRef, useState } from "react";
-import { PAGE_SIZE, createPost, deletePost, findPost, normalize, pageOf, updatePost } from "./domain";
+import { PAGE_SIZE, createPost, deletePost, findPost, movePost, normalize, pageOf, updatePost } from "./domain";
 import { bindWidget } from "./widget";
 
 var initial = {
@@ -14,6 +14,7 @@ var initial = {
     query: "",
     page: 1,
     sort: [{ dataIndex: "date", sort: "desc" }],
+    filters: {},
     posts: [],
     list: null,
     post: null,
@@ -41,7 +42,7 @@ export function useBoard() {
 
     function showList(base) {
         var current = base || stateRef.current;
-        var list = pageOf(current.posts, current.page, PAGE_SIZE, current.query, current.sort);
+        var list = pageOf(current.posts, current.page, PAGE_SIZE, current.query, current.sort, current.filters);
         return commit(Object.assign({}, current, { screen: "list", list: list, page: list.page, post: null, errors: [] }));
     }
 
@@ -67,6 +68,37 @@ export function useBoard() {
         if (command === "sort") {
             var sort = payload.sortModel && payload.sortModel.length ? payload.sortModel : [{ dataIndex: "date", sort: "desc" }];
             showList(Object.assign({}, current, { sort: sort, page: 1 }));
+            return;
+        }
+        if (command === "filter") {
+            showList(Object.assign({}, current, { filters: payload.filters || {}, page: 1 }));
+            return;
+        }
+        if (command === "reorder") {
+            var moved = movePost(current.posts, payload.id, payload.beforeId);
+            if (!moved.ok) return;
+            showList(Object.assign({}, current, { posts: moved.posts }));
+            return;
+        }
+        if (command === "cell-edit") {
+            var currentPost = findPost(current.posts, payload.id);
+            if (!currentPost) return;
+            var fields = {
+                title: currentPost.title,
+                author: currentPost.author,
+                date: currentPost.date,
+                content: currentPost.content,
+                tags: currentPost.tags.slice(),
+            };
+            if (payload.dataIndex === "tree") fields.title = payload.value;
+            else if (payload.dataIndex === "tags") fields.tags = payload.value;
+            else fields[payload.dataIndex] = payload.value;
+            var edited = updatePost(current.posts, payload.id, fields);
+            if (!edited.ok) {
+                commit(Object.assign({}, current, { errors: edited.errors }));
+                return;
+            }
+            showList(Object.assign({}, current, { posts: edited.posts, notice: "칸을 수정했습니다." }));
             return;
         }
         if (command === "open") {
