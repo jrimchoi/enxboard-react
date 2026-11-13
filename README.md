@@ -1,12 +1,14 @@
 # ENXBoardReact
 
-같은 게시판의 React 18 화면이다. JSX 번들러가 없어서 `React.createElement`로 트리를 만든다. 글 저장과 명령은 `vendor/enxboard`의 AMD 모듈을 그대로 쓴다.
+같은 게시판을 React 18 앱으로 만든 것이다. JSX와 `useState`를 쓰고, AMD 모듈은 없다.
 
-React는 `createRoot().render`로 다시 그린다. 입력은 `defaultValue`라서, 저장 전에 다시 그려도 치는 중인 글자가 컨트롤러 상태로 올라가기 전에 지워지지 않는다.
+화면은 `src/Board.jsx`다. 목록, 상세, 등록, 수정, 삭제, 검색, 5건 쪽 나눔은 `src/useBoard.js`가 상태로 가진다. 검사와 정렬은 `src/domain.js`의 함수다. 글은 `public/data/posts.json`을 읽어 메모리에만 둔다. 아이콘 글꼴은 `public/core`에 있다.
 
 ## StackBlitz
 
 https://stackblitz.com/fork/github/jrimchoi/enxboard-react
+
+Vite 개발 서버가 열리고 미리보기는 `/`다.
 
 ## 로컬
 
@@ -18,15 +20,15 @@ npm run dev
 | 주소 | 화면 |
 |---|---|
 | `/` | 게시판 |
-| `/mock-shell.html` | 대시보드 목 셸. 검색어를 위젯 값에 남긴다 |
+| `/mock-shell.html` | 대시보드 목 셸 |
 
 ## 구성
 
 | 경로 | 역할 |
 |---|---|
-| `js/view.js` | React 18 화면 |
-| `js/app.js` | `createRoot`와 공유 컨트롤러를 연결 |
-| `js/loader.js` | AMD 로더. React UMD의 익명 `define`을 한 파일씩 받는다 |
-| `vendor/react`, `vendor/react-dom` | React 18.2.0 |
-| `vendor/enxboard` | 글 모델, 목록, 저장, 명령 컨트롤러, 위젯 연결, 스타일, 목 데이터 |
-| `vendor/core` | 아이콘 CSS와 글꼴 |
+| `src/main.jsx` | `createRoot` |
+| `src/Board.jsx` | JSX 화면과 입력 |
+| `src/useBoard.js` | 화면 상태. React `useState` |
+| `src/domain.js` | 검색, 쪽, 검사, 저장 |
+| `src/widget.js` | 목 셸의 위젯 이벤트 |
+| `src/styles/board.css` | 화면 골격 |
