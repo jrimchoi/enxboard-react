@@ -1,8 +1,8 @@
 /*
  * 게시판 규칙이다. React 컴포넌트가 아니다.
  * 검색, 쪽 나눔, 검사, 등록, 수정, 삭제를 순수 함수로 둔다.
+ * 자식 글은 children이다. 쪽은 루트만 세고, 그리드가 트리를 편다.
  * 화면 상태는 useBoard의 useState가 가진다.
- * Vue 앱은 reactive, Next 앱은 pages의 useState가 같은 규칙을 각자 구현한다.
  */
 export const PAGE_SIZE = 5;
 
@@ -20,6 +20,7 @@ export function normalize(raw) {
                 return String(tag).trim();
             })
             .filter(Boolean),
+        children: Array.isArray(source.children) ? source.children.map(normalize) : [],
     };
 }
 
@@ -40,29 +41,98 @@ export function stored(post) {
         date: post.date,
         content: String(post.content).trim(),
         tags: post.tags.slice(),
+        children: (post.children || []).map(stored),
     };
 }
 
-function nextId(posts) {
-    var max = posts.reduce(function (highest, post) {
-        var number = parseInt(String(post.id).replace(/\D/g, ""), 10);
-        return Number.isFinite(number) ? Math.max(highest, number) : highest;
-    }, 0);
-    return "p" + String(max + 1).padStart(2, "0");
+export function findPost(posts, id) {
+    var found = null;
+    (posts || []).some(function (post) {
+        if (post.id === id) {
+            found = post;
+            return true;
+        }
+        found = findPost(post.children, id);
+        return !!found;
+    });
+    return found;
 }
 
-export function pageOf(posts, page, pageSize, query) {
+function maxId(posts) {
+    return (posts || []).reduce(function (highest, post) {
+        var number = parseInt(String(post.id).replace(/\D/g, ""), 10);
+        var next = Number.isFinite(number) ? Math.max(highest, number) : highest;
+        return Math.max(next, maxId(post.children));
+    }, 0);
+}
+
+function nextId(posts) {
+    return "p" + String(maxId(posts) + 1).padStart(2, "0");
+}
+
+function textOf(post) {
+    return [post.title, post.author, post.content, (post.tags || []).join(" ")].join(" ").toLowerCase();
+}
+
+function keepMatch(post, needle) {
+    if (!needle) return stored(post);
+    var children = (post.children || []).map(function (child) {
+        return keepMatch(child, needle);
+    }).filter(Boolean);
+    if (textOf(post).indexOf(needle) !== -1) return stored(post);
+    if (!children.length) return null;
+    var copy = stored(post);
+    copy.children = children;
+    return copy;
+}
+
+function comparePosts(left, right, sortModel) {
+    var model = sortModel && sortModel.length ? sortModel : [{ dataIndex: "date", sort: "desc" }];
+    for (var index = 0; index < model.length; index += 1) {
+        var key = model[index].dataIndex === "tree" ? "title" : model[index].dataIndex;
+        var lv = key === "tags" ? (left.tags || []).join(", ") : String(left[key] || "");
+        var rv = key === "tags" ? (right.tags || []).join(", ") : String(right[key] || "");
+        if (lv === rv) continue;
+        var order = lv < rv ? -1 : 1;
+        return model[index].sort === "desc" ? -order : order;
+    }
+    return 0;
+}
+
+function sortPosts(posts, sortModel) {
+    return (posts || []).map(function (post) {
+        var copy = stored(post);
+        copy.children = sortPosts(copy.children, sortModel);
+        return copy;
+    }).sort(function (left, right) {
+        return comparePosts(left, right, sortModel);
+    });
+}
+
+function replacePost(posts, id, mapper) {
+    var found = false;
+    var next = (posts || []).map(function (post) {
+        if (post.id === id) {
+            found = true;
+            return mapper(post);
+        }
+        var below = replacePost(post.children, id, mapper);
+        if (!below.found) return post;
+        found = true;
+        var copy = stored(post);
+        copy.children = below.posts;
+        return copy;
+    });
+    return { found: found, posts: next };
+}
+
+export function pageOf(posts, page, pageSize, query, sortModel) {
     var size = pageSize > 0 ? pageSize : PAGE_SIZE;
     var needle = String(query || "").trim().toLowerCase();
-    var matched = posts.filter(function (post) {
-        if (!needle) return true;
-        var haystack = [post.title, post.author, post.content, post.tags.join(" ")].join(" ").toLowerCase();
-        return haystack.indexOf(needle) !== -1;
-    });
-    matched.sort(function (left, right) {
-        if (left.date === right.date) return right.id < left.id ? -1 : 1;
-        return right.date < left.date ? -1 : 1;
-    });
+    var matched = (posts || []).map(function (post) {
+        return keepMatch(post, needle);
+    }).filter(Boolean);
+    matched = sortPosts(matched, sortModel);
     var total = matched.length;
     var pageCount = Math.max(1, Math.ceil(total / size));
     var current = Math.min(Math.max(page || 1, 1), pageCount);
@@ -89,24 +159,41 @@ export function createPost(posts, raw) {
 }
 
 export function updatePost(posts, id, raw) {
-    var index = posts.findIndex(function (post) {
-        return post.id === id;
-    });
-    if (index < 0) return { ok: false, errors: ["글을 찾지 못했습니다."] };
+    var current = findPost(posts, id);
+    if (!current) return { ok: false, errors: ["글을 찾지 못했습니다."] };
     var post = normalize(raw);
     post.id = id;
+    post.children = current.children || [];
     var errors = validate(post);
     if (errors.length) return { ok: false, errors: errors, post: post };
     var saved = stored(post);
-    var next = posts.slice();
-    next[index] = saved;
-    return { ok: true, posts: next, post: saved };
+    var replaced = replacePost(posts, id, function () {
+        return saved;
+    });
+    return { ok: true, posts: replaced.posts, post: saved };
+}
+
+function withoutPost(posts, id) {
+    var found = false;
+    var next = [];
+    (posts || []).forEach(function (post) {
+        if (post.id === id) {
+            found = true;
+            return;
+        }
+        var copy = stored(post);
+        var below = withoutPost(copy.children, id);
+        if (below.found) {
+            found = true;
+            copy.children = below.posts;
+        }
+        next.push(copy);
+    });
+    return { found: found, posts: next };
 }
 
 export function deletePost(posts, id) {
-    var next = posts.filter(function (post) {
-        return post.id !== id;
-    });
-    if (next.length === posts.length) return { ok: false, errors: ["글을 찾지 못했습니다."] };
-    return { ok: true, posts: next };
+    var removed = withoutPost(posts, id);
+    if (!removed.found) return { ok: false, errors: ["글을 찾지 못했습니다."] };
+    return { ok: true, posts: removed.posts };
 }

@@ -6,6 +6,14 @@
  */
 import { useEffect, useState } from "react";
 import { useBoard } from "./useBoard";
+import { DataGrid } from "./grid/DataGrid";
+
+var columns = [
+    { text: "제목", dataIndex: "tree" },
+    { text: "작성자", dataIndex: "author" },
+    { text: "날짜", dataIndex: "date" },
+    { text: "태그", dataIndex: "tags" },
+];
 
 function Icon(props) {
     return <i className={"wux-ui-3ds wux-ui-3ds-" + props.name} aria-hidden="true" />;
@@ -82,38 +90,16 @@ export default function Board() {
                         전체 {state.list.total}건, {state.list.page} / {state.list.pageCount}쪽
                     </p>
                     <div className="grid-host">
-                        <table>
-                            <thead>
-                                <tr>
-                                    <th>제목</th>
-                                    <th>작성자</th>
-                                    <th>날짜</th>
-                                    <th>태그</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {state.list.items.length ? (
-                                    state.list.items.map(function (post) {
-                                        return (
-                                            <tr key={post.id}>
-                                                <td>
-                                                    <button type="button" className="link" onClick={function () { board.handle("open", { id: post.id }); }}>
-                                                        {post.title}
-                                                    </button>
-                                                </td>
-                                                <td>{post.author}</td>
-                                                <td>{post.date}</td>
-                                                <td>{post.tags.join(", ")}</td>
-                                            </tr>
-                                        );
-                                    })
-                                ) : (
-                                    <tr>
-                                        <td colSpan={4} className="empty">검색 결과가 없습니다.</td>
-                                    </tr>
-                                )}
-                            </tbody>
-                        </table>
+                        <DataGrid
+                            rows={state.list.items}
+                            columns={columns}
+                            sortModel={state.sort}
+                            rowSelection="single"
+                            showSelectionCheckBoxesFlag
+                            onSort={function (sortModel) { board.handle("sort", { sortModel: sortModel }); }}
+                            emptyText="검색 결과가 없습니다."
+                            onActivate={function (event) { board.handle("open", { id: event.node.id }); }}
+                        />
                     </div>
                     <div className="pager">
                         <button type="button" disabled={state.list.page <= 1} onClick={function () { board.handle("page", { page: state.list.page - 1 }); }}>

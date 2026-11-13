@@ -6,13 +6,14 @@
  * 글 목록은 이 훅 안에만 있다. define이나 require는 없다.
  */
 import { useEffect, useRef, useState } from "react";
-import { PAGE_SIZE, createPost, deletePost, normalize, pageOf, updatePost } from "./domain";
+import { PAGE_SIZE, createPost, deletePost, findPost, normalize, pageOf, updatePost } from "./domain";
 import { bindWidget } from "./widget";
 
 var initial = {
     screen: "list",
     query: "",
     page: 1,
+    sort: [{ dataIndex: "date", sort: "desc" }],
     posts: [],
     list: null,
     post: null,
@@ -40,15 +41,13 @@ export function useBoard() {
 
     function showList(base) {
         var current = base || stateRef.current;
-        var list = pageOf(current.posts, current.page, PAGE_SIZE, current.query);
+        var list = pageOf(current.posts, current.page, PAGE_SIZE, current.query, current.sort);
         return commit(Object.assign({}, current, { screen: "list", list: list, page: list.page, post: null, errors: [] }));
     }
 
     function showDetail(id, base) {
         var current = base || stateRef.current;
-        var found = current.posts.find(function (post) {
-            return post.id === id;
-        });
+        var found = findPost(current.posts, id);
         if (!found) return commit(Object.assign({}, current, { errors: ["글을 찾지 못했습니다."] }));
         return commit(Object.assign({}, current, { screen: "detail", post: normalize(found), errors: [] }));
     }
@@ -63,6 +62,11 @@ export function useBoard() {
         }
         if (command === "page") {
             showList(Object.assign({}, current, { page: payload.page }));
+            return;
+        }
+        if (command === "sort") {
+            var sort = payload.sortModel && payload.sortModel.length ? payload.sortModel : [{ dataIndex: "date", sort: "desc" }];
+            showList(Object.assign({}, current, { sort: sort, page: 1 }));
             return;
         }
         if (command === "open") {
